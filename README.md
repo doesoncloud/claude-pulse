@@ -127,11 +127,20 @@ Cambiar `publisher` en `package.json` de `CHANGEME` al id real antes de publicar
   reset en la status bar; con API key se muestra directo en el tooltip.
 - **Pulso como GIF, no animación en vivo**: el tooltip de status bar no es
   un webview — no ejecuta JS ni CSS, solo Markdown. Un `<canvas>`/SVG
-  animado no es posible ahí. Se generaron 4 GIFs pequeños (uno por
-  severidad, `src/pulseAssets.ts`, ~20KB c/u en base64) con Pillow — sí es
-  animación real, pero no puede reaccionar en vivo al % exacto dentro del
-  propio frame, solo se elige qué color mostrar al reconstruir el tooltip.
+  animado no es posible ahí. Se generaron 4 GIFs (uno por severidad,
+  `src/pulseAssets.ts`, ~25-30KB c/u en base64) con Pillow: forma de ECG real
+  (ondas P/QRS/T vía suma de gaussianas, no un zigzag recto), muestreada a
+  alta densidad y con una capa de glow difuminada debajo de una línea fina
+  nítida — sin bordes duros ni pixelado. Sí es animación real (30 frames),
+  pero no puede reaccionar en vivo al % exacto dentro del propio frame; solo
+  se elige qué de las 4 variantes de color mostrar al reconstruir el tooltip.
 - **Colores de severidad**: 4 escalones (no continuo) — azul/verde/
   amarillo/naranja según `< 20 / < 40 / < 60 / resto`. Coherente con la
   paleta pedida (azul→verde→amarillo→ámbar→naranja), colapsando ámbar y
-  naranja en un único escalón superior.
+  naranja en un único escalón superior. Mismo bucket para el color del icono
+  de la status bar (`statusBarItem.color`, `ThemeColor` `charts.*`) y para el
+  GIF — un único punto de verdad (`severityBucket()`).
+- **Barra con resolución subcaracter**: 8 celdas usando los bloques Unicode
+  de octavo (`▏▎▍▌▋▊▉█`) en vez de alternar solo lleno/vacío en 10 celdas —
+  se ve más fina/moderna y representa el % con más precisión visual. Celdas
+  vacías como `·` (punto) en vez de bloque sombreado, menos "pesado".

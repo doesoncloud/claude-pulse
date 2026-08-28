@@ -13,12 +13,22 @@ let lastPrecise: PreciseUsage | undefined;
 let lastProbeError: string | undefined;
 let usingApiTokens = false;
 
-const BAR_SEGMENTS = 10;
+const BAR_SEGMENTS = 8;
+// Bloques de octavo de carácter (▏..█) para una barra con resolución subcaracter
+// — más suave que alternar solo entre "lleno"/"vacío" a cada uno de los N huecos.
+const EIGHTHS = ["▏", "▎", "▍", "▌", "▋", "▊", "▉"];
 
 function renderBar(pct: number): string {
   const clamped = Math.max(0, Math.min(100, pct));
-  const filled = Math.round((clamped / 100) * BAR_SEGMENTS);
-  return "█".repeat(filled) + "░".repeat(BAR_SEGMENTS - filled);
+  const totalEighths = Math.round((clamped / 100) * BAR_SEGMENTS * 8);
+  let out = "";
+  for (let i = 0; i < BAR_SEGMENTS; i++) {
+    const filled = Math.max(0, Math.min(8, totalEighths - i * 8));
+    if (filled === 0) out += "·";
+    else if (filled === 8) out += "█";
+    else out += EIGHTHS[filled - 1];
+  }
+  return out;
 }
 
 function formatCost(cost: number): string {
@@ -51,8 +61,9 @@ function resetTarget5h(): Date | null {
   return null;
 }
 
-/** Mismos 4 escalones de color que la severidad del panel, aplicados al GIF embebido. */
-function severityColorName(pct: number): keyof typeof PULSE_GIF_BASE64 {
+/** 4 escalones de severidad — mismo bucket para el color del icono de la status
+ * bar (ThemeColor `charts.*`) y para elegir el GIF de pulso correspondiente. */
+function severityBucket(pct: number): "blue" | "green" | "yellow" | "orange" {
   if (pct < 20) return "blue";
   if (pct < 40) return "green";
   if (pct < 60) return "yellow";
@@ -76,46 +87,46 @@ function render() {
 
   const icon = exact ? "$(pulse)" : "$(pulse) ~";
   statusBarItem.text = `${icon} ${bar} ${label}`;
+  statusBarItem.color = new vscode.ThemeColor(`charts.${severityBucket(pct)}`);
   statusBarItem.tooltip = buildTooltip(pct, exact);
   statusBarItem.show();
 }
 
 function buildTooltip(pct5h: number, exact: boolean): vscode.MarkdownString {
-  const md = new vscode.MarkdownString();
-  const gif = PULSE_GIF_BASE64[severityColorName(pct5h)];
+  const md = new vscode.MarkdownString(undefined, true); // supportThemeIcons -> permite $(icono) inline
+  const gif = PULSE_GIF_BASE64[severityBucket(pct5h)];
 
-  md.appendMarkdown(`### Claude Pulse\n\n`);
+  md.appendMarkdown(`$(pulse) **Claude Pulse**\n\n`);
   md.appendMarkdown(`![pulso](data:image/gif;base64,${gif})\n\n`);
-  md.appendMarkdown(`**${pct5h.toFixed(0)}%** de la ventana de 5h`);
-  md.appendMarkdown(exact ? ` · dato exacto de Anthropic\n\n` : ` · ≈ estimado local\n\n`);
-  md.appendMarkdown(`⏱ Reset en **${formatCountdown(resetTarget5h())}**\n\n`);
+
+  md.appendMarkdown(`**${pct5h.toFixed(0)}%** ventana de 5h`);
+  md.appendMarkdown(exact ? ` &nbsp;·&nbsp; dato exacto\n\n` : ` &nbsp;·&nbsp; ≈ estimado local\n\n`);
+  md.appendMarkdown(`$(clock)&nbsp;reset en **${formatCountdown(resetTarget5h())}**\n\n`);
 
   if (lastPrecise) {
-    md.appendMarkdown(`---\n\n`);
     md.appendMarkdown(
-      `**${lastPrecise.sevenDay.utilizationPct.toFixed(0)}%** de la ventana de 7 días · reset en ${formatCountdown(lastPrecise.sevenDay.resetAt)}\n\n`
+      `$(graph-line)&nbsp;**${lastPrecise.sevenDay.utilizationPct.toFixed(0)}%** ventana de 7 días &nbsp;·&nbsp; reset en ${formatCountdown(lastPrecise.sevenDay.resetAt)}\n\n`
     );
     if (lastPrecise.overallStatus !== "allowed") {
-      md.appendMarkdown(`⚠️ Estado de la cuenta: **${lastPrecise.overallStatus}**\n\n`);
+      md.appendMarkdown(`$(warning)&nbsp;Estado de la cuenta: **${lastPrecise.overallStatus}**\n\n`);
     }
   }
 
   if (lastLocalStats) {
     const w5h = lastLocalStats.windows["5h"];
-    md.appendMarkdown(`---\n\n`);
-    md.appendMarkdown(`${w5h.requests} peticiones en esta ventana de 5h\n\n`);
+    md.appendMarkdown(`_${w5h.requests} peticiones en esta ventana_\n\n`);
 
     if (usingApiTokens) {
       const w24h = lastLocalStats.windows["24h"];
       const w7d = lastLocalStats.windows["7d"];
       md.appendMarkdown(
-        `💰 5h: ${formatCost(w5h.cost)} · 24h: ${formatCost(w24h.cost)} · 7d: ${formatCost(w7d.cost)} · histórico: ${formatCost(lastLocalStats.allTime.cost)}\n\n`
+        `_Coste — 5h ${formatCost(w5h.cost)} · 24h ${formatCost(w24h.cost)} · 7d ${formatCost(w7d.cost)} · histórico ${formatCost(lastLocalStats.allTime.cost)}_\n\n`
       );
     }
   }
 
   if (lastProbeError) {
-    md.appendMarkdown(`---\n\n⚠ ${lastProbeError} — usando estimación local mientras tanto\n\n`);
+    md.appendMarkdown(`$(warning)&nbsp;_${lastProbeError} — estimación local mientras tanto_\n\n`);
   }
 
   return md;
