@@ -1,9 +1,17 @@
 {
   "name": "claude-pulse",
   "displayName": "Claude Pulse",
-  "description": "Barra de estado en tiempo real con el gasto y el % de uso de la ventana de rate-limit de Claude Code.",
-  "version": "0.0.1",
+  "description": "Barra de estado en tiempo real con el % exacto de uso de la ventana de rate-limit de Claude Code (dato real de Anthropic, no una estimación).",
+  "version": "0.1.0",
   "publisher": "CHANGEME",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doesoncloud/claude-pulse"
+  },
+  "bugs": {
+    "url": "https://github.com/doesoncloud/claude-pulse/issues"
+  },
   "private": true,
   "engines": {
     "vscode": "^1.85.0"
@@ -68,7 +76,7 @@
     "watch": "node esbuild.js --watch",
     "check": "tsc --noEmit",
     "vscode:prepublish": "npm run build",
-    "package": "node -r ./scripts/node18-file-shim.js ./node_modules/.bin/vsce package --allow-missing-repository"
+    "package": "node -r ./scripts/node18-file-shim.js ./node_modules/.bin/vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

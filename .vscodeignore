@@ -1,6 +1,7 @@
 .vscode/**
 src/**
 scripts/**
+docs/**
 .gitignore
 esbuild.js
 tsconfig.json
