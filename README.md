@@ -1,23 +1,31 @@
 # Claude Pulse
 
 Extensión de VS Code: indicador en la status bar con el **% exacto** de uso
-de la ventana de rate-limit de Claude Code (5h y 7d) — click abre un detalle
-enriquecido (QuickPick con secciones/iconos por severidad). Además, un panel
-opcional (dock en el área inferior junto a Terminal/Output, estilo
-`vscode-pets`) con una línea de pulso animada en vivo para quien quiera
-dejarlo fijo.
+de la ventana de rate-limit de Claude Code (5h y 7d). El detalle vive en el
+**tooltip** (hover sobre el icono) — anclado justo encima de la status bar,
+con un pequeño GIF de pulso animado (color según severidad) como detalle
+decorativo, no protagonista.
 
-**Sobre el "flyout anclado a la status bar"**: se evaluó y descartó — VS Code
-no expone a las extensiones ninguna API para crear una ventana flotante
-posicionada junto a un elemento arbitrario (tipo menú de inicio de Windows).
-Los primitivos reales son QuickPick (transient, animación nativa, pero
-posición fija centrada arriba — la que usamos para el detalle), el tooltip de
-status bar (sí anclado, pero solo con hover, no click) y las vistas dockeadas
-(el panel). Documentado por si se reabre la decisión más adelante.
+## Por qué no hay flyout ni panel dockeado
 
-La línea del panel late más rápido y su color interpola por un degradado
-continuo de 5 paradas (azul → verde → amarillo → ámbar → naranja) según el %
-de la ventana de 5h.
+Se evaluaron y descartaron dos alternativas antes de llegar aquí:
+
+- **Un flyout flotante anclado a la status bar** (tipo menú de inicio de
+  Windows): VS Code no expone ninguna API de extensiones para crear una
+  ventana posicionada junto a un elemento arbitrario de la UI. No es una
+  limitación de esta extensión, es de la plataforma.
+- **QuickPick al hacer click**: sí es "flyout-like" en comportamiento
+  (aparece/desaparece con animación nativa, se cierra al clicar fuera), pero
+  su posición la fija VS Code — siempre centrado arriba, como el buscador de
+  archivos. No se puede anclar a la status bar.
+- **Un panel dockeado** (como `vscode-pets`, en el área inferior junto a
+  Terminal/Output): posición fija (esa zona), no es un elemento flotante ni
+  transitorio — es una pestaña permanente más.
+
+El **tooltip de la status bar** es la única superficie que VS Code sí ancla
+justo donde vive el icono. La limitación es que se activa con hover, no con
+click, y su contenido es Markdown (sin JS, sin CSS real) — por eso el pulso
+es un GIF pre-renderizado en vez de una animación en vivo por código.
 
 ## Cómo consigue el % exacto (no una estimación)
 
@@ -42,7 +50,8 @@ el dato exacto.
 
 El coste en $ (5h/24h/7d) sí sigue siendo estimado localmente vía tabla de
 precios embebida — Anthropic no devuelve un coste en $ en las cabeceras,
-solo utilización.
+solo utilización. Y solo se muestra si detecta que usas una API key de pago,
+no con suscripción (Pro/Max/Team) — ver "Decisiones de diseño".
 
 ## Instalar para desarrollo/test
 
@@ -50,14 +59,11 @@ solo utilización.
 npm install
 ```
 
-Abre esta carpeta en VS Code y pulsa **F5** (`Run Extension`). Se abre una ventana
-"Extension Development Host" con la extensión activa — el panel "Claude Pulse"
-aparece como pestaña junto a Terminal/Output/Problems (área inferior por
-defecto), y el resumen compacto en la status bar. Arrástralo a un lateral o al
-Explorer si prefieres esa ubicación — es la ubicación estándar de VS Code, se
-recuerda entre sesiones igual que cualquier otro panel. Guardar un `.ts`
-recompila solo (`npm run watch` corre como pre-launch task); recarga la
-ventana de dev host con `Cmd/Ctrl+R`.
+Abre esta carpeta en VS Code y pulsa **F5** (`Run Extension`). Se abre una
+ventana "Extension Development Host" — pasa el ratón por encima del icono de
+Claude Pulse en la status bar (esquina inferior derecha) para ver el
+tooltip. Guardar un `.ts` recompila solo (`npm run watch` corre como
+pre-launch task); recarga la ventana de dev host con `Cmd/Ctrl+R`.
 
 Para probarla como instalación real (persiste al cerrar VS Code):
 
@@ -117,11 +123,15 @@ Cambiar `publisher` en `package.json` de `CHANGEME` al id real antes de publicar
 - **Coste solo si es accionable**: `detectUsingApiTokens()` (`claude auth
   status` → `authMethod`) distingue suscripción (Pro/Max/Team, coste en $ no
   aplica — plan fijo) de API key de pago (coste sí es dinero real). Con
-  suscripción, el coste se oculta de la status bar/panel y se sustituye por
-  el tiempo hasta el reset; sigue accesible en el detalle (QuickPick) y
-  plegado en el panel.
-- **Colores de severidad**: el panel usa un degradado RGB continuo (CSS, sin
-  restricción). El QuickPick, al ser UI nativa, solo admite `ThemeColor` de
-  la paleta registrada de VS Code (`charts.blue/green/yellow/orange`) — se
-  discretiza a 4 escalones en vez de interpolar, es una limitación de esa API,
-  no una elección de diseño.
+  suscripción, el coste se oculta y se sustituye por el tiempo hasta el
+  reset en la status bar; con API key se muestra directo en el tooltip.
+- **Pulso como GIF, no animación en vivo**: el tooltip de status bar no es
+  un webview — no ejecuta JS ni CSS, solo Markdown. Un `<canvas>`/SVG
+  animado no es posible ahí. Se generaron 4 GIFs pequeños (uno por
+  severidad, `src/pulseAssets.ts`, ~20KB c/u en base64) con Pillow — sí es
+  animación real, pero no puede reaccionar en vivo al % exacto dentro del
+  propio frame, solo se elige qué color mostrar al reconstruir el tooltip.
+- **Colores de severidad**: 4 escalones (no continuo) — azul/verde/
+  amarillo/naranja según `< 20 / < 40 / < 60 / resto`. Coherente con la
+  paleta pedida (azul→verde→amarillo→ámbar→naranja), colapsando ámbar y
+  naranja en un único escalón superior.

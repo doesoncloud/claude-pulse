@@ -4,16 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es
 
-Extensión de VS Code (TypeScript + esbuild). Panel persistente estilo
-`vscode-pets` (dock en el área inferior, arrastrable) con una línea de pulso
-animada que refleja el **% exacto** de uso de la ventana de rate-limit de
-5h/7d de Claude Code + coste estimado, más un resumen compacto en la status
-bar. Ver `README.md` § "Cómo consigue el % exacto" para instalar/publicar y
-el mecanismo completo — resumen: sondea `claude -p --no-session-persistence`
-con `ANTHROPIC_LOG=debug` y parsea las cabeceras reales
-`anthropic-ratelimit-unified-*` de la respuesta de Anthropic (no una
-estimación por tokens). El coste en $ sí sigue siendo estimado localmente
-desde `~/.claude/projects/**/*.jsonl`.
+Extensión de VS Code (TypeScript + esbuild). Indicador en la status bar con
+el **% exacto** de uso de la ventana de rate-limit de Claude Code — el
+detalle vive en el **tooltip** (hover, anclado a la status bar; es la única
+posición real que VS Code deja anclar ahí, ver README § "Por qué no hay
+flyout/panel"), con un GIF pequeño de pulso animado embebido (color según
+severidad) como detalle decorativo, no protagonista. Ver `README.md` §
+"Cómo consigue el % exacto" para el mecanismo completo — resumen: sondea
+`claude -p --no-session-persistence` con `ANTHROPIC_LOG=debug` y parsea las
+cabeceras reales `anthropic-ratelimit-unified-*` de la respuesta de
+Anthropic (no una estimación por tokens). El coste en $ sí sigue siendo
+estimado localmente desde `~/.claude/projects/**/*.jsonl`, y solo se muestra
+si la sesión usa API key de pago (no con suscripción, donde no aplica).
 
 El coste ($) reutiliza la misma lógica que `~/stacks/claude-dash/app/app.py`
 (dashboard Flask del homelab) pero portada a TypeScript client-side, sin
@@ -40,17 +42,17 @@ Test manual: F5 en VS Code abre el Extension Development Host con la extensión 
   lanza `claude -p` y parsea las cabeceras `anthropic-ratelimit-unified-*` del log
   de depuración. Fuente del **% exacto**. Testeable de forma aislada (`execFile`
   mockeable).
-- `src/panel.ts` — `PulsePanelProvider` (`WebviewViewProvider`): renderiza el
-  panel persistente (línea de pulso SVG animada vía CSS, velocidad/color según
-  el %). HTML inline con nonce/CSP, comunicación por `postMessage` — sin
-  dependencias externas, sin framework.
-- `src/extension.ts` — capa VS Code: `StatusBarItem` + registro del
-  `WebviewViewProvider`, comandos (`claudePulse.showDetails`,
-  `claudePulse.refresh`), dos timers independientes (`localTick` cada
-  `refreshIntervalSeconds` para coste/tokens, `probeTick` cada
-  `preciseProbeIntervalSeconds` para el % exacto) — desacoplados a propósito:
-  el % exacto es caro de refrescar (llamada real), el coste local es gratis.
-  Cada tick empuja los datos al panel vía `panelProvider.update()`.
+- `src/pulseAssets.ts` — 4 GIFs de pulso (azul/verde/amarillo/naranja, ~20KB
+  cada uno) generados con Pillow y embebidos en base64. Estático, no hay
+  script de build automático — regenerar a mano si cambia el diseño (ver
+  comentario en el propio fichero).
+- `src/extension.ts` — capa VS Code: `StatusBarItem` (texto + `tooltip`
+  `MarkdownString` como única vista de detalle — sin QuickPick, sin webview),
+  comando `claudePulse.refresh` (click en la barra = refresco manual), dos
+  timers independientes (`localTick` cada `refreshIntervalSeconds` para
+  coste/tokens, `probeTick` cada `preciseProbeIntervalSeconds` para el %
+  exacto) — desacoplados a propósito: el % exacto es caro de refrescar
+  (llamada real), el coste local es gratis.
 
 ## Convenciones de precios
 

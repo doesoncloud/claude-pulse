@@ -13,29 +13,7 @@
   "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
   "contributes": {
-    "viewsContainers": {
-      "panel": [
-        {
-          "id": "claudePulseContainer",
-          "title": "Claude Pulse",
-          "icon": "media/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "claudePulseContainer": [
-        {
-          "id": "claudePulse.panel",
-          "name": "Claude Pulse",
-          "type": "webview"
-        }
-      ]
-    },
     "commands": [
-      {
-        "command": "claudePulse.showDetails",
-        "title": "Claude Pulse: Ver detalle de uso"
-      },
       {
         "command": "claudePulse.refresh",
         "title": "Claude Pulse: Refrescar ahora"
