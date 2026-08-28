@@ -4,13 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es
 
-Extensión de VS Code (TypeScript + esbuild). Barra de estado con el % de uso de la
-ventana de rate-limit de 5h de Claude Code + coste estimado, leyendo directamente
-`~/.claude/projects/**/*.jsonl` — sin backend propio. Ver `README.md` para instalar/publicar.
+Extensión de VS Code (TypeScript + esbuild). Barra de estado con el **% exacto**
+de uso de la ventana de rate-limit de 5h/7d de Claude Code + coste estimado.
+Ver `README.md` § "Cómo consigue el % exacto" para instalar/publicar y el
+mecanismo completo — resumen: sondea `claude -p --no-session-persistence` con
+`ANTHROPIC_LOG=debug` y parsea las cabeceras reales `anthropic-ratelimit-unified-*`
+de la respuesta de Anthropic (no una estimación por tokens). El coste en $ sí
+sigue siendo estimado localmente desde `~/.claude/projects/**/*.jsonl`.
 
-Réplica en TypeScript de la lógica de `~/stacks/claude-dash/app/app.py` (dashboard
-Flask del homelab) pero client-side y sin dependencia de ese servicio — pensada para
-publicarse en el Marketplace, no solo para uso interno.
+El coste ($) reutiliza la misma lógica que `~/stacks/claude-dash/app/app.py`
+(dashboard Flask del homelab) pero portada a TypeScript client-side, sin
+dependencia de ese servicio — pensada para publicarse en el Marketplace.
 
 ## Comandos
 
@@ -28,10 +32,16 @@ Test manual: F5 en VS Code abre el Extension Development Host con la extensión 
 
 - `src/usage.ts` — capa pura sin dependencia de `vscode`: lee los `.jsonl`, calcula
   coste por modelo (`PRICING`, tabla embebida) y agrega en ventanas 5h/24h/7d
-  (`buildStats`). Testeable de forma aislada.
+  (`buildStats`). Fuente del **coste** ($), no del %. Testeable de forma aislada.
+- `src/preciseUsage.ts` — capa pura sin dependencia de `vscode`: `probeExactUsage()`
+  lanza `claude -p` y parsea las cabeceras `anthropic-ratelimit-unified-*` del log
+  de depuración. Fuente del **% exacto**. Testeable de forma aislada (`execFile`
+  mockeable).
 - `src/extension.ts` — capa VS Code: `StatusBarItem`, comandos (`claudePulse.showDetails`,
-  `claudePulse.refresh`), lectura de `workspace.getConfiguration`, polling por
-  `setInterval` (sin `fs.watch` recursivo, ver README § Decisiones de diseño).
+  `claudePulse.refresh`), dos timers independientes (`localTick` cada
+  `refreshIntervalSeconds` para coste/tokens, `probeTick` cada
+  `preciseProbeIntervalSeconds` para el % exacto) — desacoplados a propósito:
+  el % exacto es caro de refrescar (llamada real), el coste local es gratis.
 
 ## Convenciones de precios
 

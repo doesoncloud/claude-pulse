@@ -1,9 +1,15 @@
 import * as vscode from "vscode";
 import { buildStats, loadMessages, Stats } from "./usage";
+import { probeExactUsage, PreciseUsage } from "./preciseUsage";
 
 let statusBarItem: vscode.StatusBarItem;
-let refreshTimer: NodeJS.Timeout | undefined;
-let lastStats: Stats | undefined;
+let localTickTimer: NodeJS.Timeout | undefined;
+let probeTimer: NodeJS.Timeout | undefined;
+let probeInFlight = false;
+
+let lastLocalStats: Stats | undefined;
+let lastPrecise: PreciseUsage | undefined;
+let lastProbeError: string | undefined;
 
 const BAR_SEGMENTS = 10;
 
@@ -17,8 +23,10 @@ function formatCost(cost: number): string {
   return `$${cost.toFixed(2)}`;
 }
 
-function formatCountdown(secs: number | null): string {
-  if (secs === null) return "sin actividad reciente";
+function formatCountdown(target: Date | null): string {
+  if (!target) return "sin datos";
+  const secs = Math.floor((target.getTime() - Date.now()) / 1000);
+  if (secs <= 0) return "reseteando...";
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   return `${h}h ${m}m`;
@@ -28,77 +36,137 @@ function config() {
   return vscode.workspace.getConfiguration("claudePulse");
 }
 
-function refresh() {
+/** % a mostrar en la barra: exacto de Anthropic si el probe funcionó, si no, estimación local. */
+function currentPct5h(): { pct: number; exact: boolean } {
+  if (lastPrecise) return { pct: lastPrecise.fiveHour.utilizationPct, exact: true };
+  if (lastLocalStats) return { pct: lastLocalStats.pct5h, exact: false };
+  return { pct: 0, exact: false };
+}
+
+function resetTarget5h(): Date | null {
+  if (lastPrecise) return lastPrecise.fiveHour.resetAt;
+  if (lastLocalStats?.secsToReset != null) return new Date(Date.now() + lastLocalStats.secsToReset * 1000);
+  return null;
+}
+
+function render() {
   const cfg = config();
-  const tokenLimit5h = cfg.get<number>("tokenLimit5h", 88000);
   const displayMode = cfg.get<string>("displayMode", "both");
-  const projectsDir = cfg.get<string>("projectsDir", "");
-
-  let stats: Stats;
-  try {
-    const messages = loadMessages(projectsDir || undefined);
-    stats = buildStats(messages, tokenLimit5h);
-  } catch (err) {
-    statusBarItem.text = "$(pulse) Claude Pulse: error";
-    statusBarItem.tooltip = `No se pudieron leer las sesiones de Claude Code: ${err}`;
-    return;
-  }
-  lastStats = stats;
-
-  const bar = renderBar(stats.pct5h);
-  const w5h = stats.windows["5h"];
+  const { pct, exact } = currentPct5h();
+  const bar = renderBar(pct);
+  const cost5h = lastLocalStats?.windows["5h"].cost ?? 0;
 
   let label = "";
-  if (displayMode === "percent") label = `${stats.pct5h}%`;
-  else if (displayMode === "cost") label = formatCost(w5h.cost);
-  else label = `${stats.pct5h}% · ${formatCost(w5h.cost)}`;
+  if (displayMode === "percent") label = `${pct.toFixed(0)}%`;
+  else if (displayMode === "cost") label = formatCost(cost5h);
+  else label = `${pct.toFixed(0)}% · ${formatCost(cost5h)}`;
 
-  statusBarItem.text = `$(pulse) ${bar} ${label}`;
-  statusBarItem.tooltip = buildTooltip(stats);
+  const icon = exact ? "$(pulse)" : "$(pulse) ~";
+  statusBarItem.text = `${icon} ${bar} ${label}`;
+  statusBarItem.tooltip = buildTooltip(exact);
   statusBarItem.show();
 }
 
-function buildTooltip(stats: Stats): vscode.MarkdownString {
-  const w5h = stats.windows["5h"];
-  const w24h = stats.windows["24h"];
-  const w7d = stats.windows["7d"];
-
+function buildTooltip(exact: boolean): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.appendMarkdown(`**Claude Pulse**\n\n`);
-  md.appendMarkdown(`Ventana 5h (rate-limit): **${stats.pct5h}%** de ${stats.tokenLimit5h.toLocaleString()} tok salida\n\n`);
-  md.appendMarkdown(`- Coste: ${formatCost(w5h.cost)} · ${w5h.requests} peticiones\n`);
-  md.appendMarkdown(`- Reset en: ${formatCountdown(stats.secsToReset)}\n\n`);
-  md.appendMarkdown(`**24h**: ${formatCost(w24h.cost)} · ${w24h.requests} peticiones\n\n`);
-  md.appendMarkdown(`**7d**: ${formatCost(w7d.cost)} · ${w7d.requests} peticiones\n\n`);
+
+  if (lastPrecise) {
+    const agoSecs = Math.floor((Date.now() - lastPrecise.probedAt.getTime()) / 1000);
+    md.appendMarkdown(
+      `Ventana 5h (**dato exacto de Anthropic**, sondeado hace ${agoSecs}s): **${lastPrecise.fiveHour.utilizationPct.toFixed(1)}%** · reset en ${formatCountdown(lastPrecise.fiveHour.resetAt)}\n\n`
+    );
+    md.appendMarkdown(
+      `Ventana 7d: **${lastPrecise.sevenDay.utilizationPct.toFixed(1)}%** · reset en ${formatCountdown(lastPrecise.sevenDay.resetAt)}\n\n`
+    );
+    if (lastPrecise.overallStatus !== "allowed") {
+      md.appendMarkdown(`⚠️ Estado: **${lastPrecise.overallStatus}**\n\n`);
+    }
+  } else {
+    md.appendMarkdown(`_Sin dato exacto todavía${lastProbeError ? ` (${lastProbeError})` : ""} — mostrando estimación local._\n\n`);
+    if (lastLocalStats) {
+      md.appendMarkdown(`Ventana 5h (≈ estimado por tokens): **${lastLocalStats.pct5h.toFixed(1)}%**\n\n`);
+    }
+  }
+
+  if (lastLocalStats) {
+    const w5h = lastLocalStats.windows["5h"];
+    const w24h = lastLocalStats.windows["24h"];
+    const w7d = lastLocalStats.windows["7d"];
+    md.appendMarkdown(`**Coste** — 5h: ${formatCost(w5h.cost)} (${w5h.requests} peticiones) · `);
+    md.appendMarkdown(`24h: ${formatCost(w24h.cost)} · 7d: ${formatCost(w7d.cost)}\n\n`);
+  }
+
   md.appendMarkdown(`_Click para ver el detalle completo._`);
   return md;
 }
 
+function localTick() {
+  const cfg = config();
+  const tokenLimit5h = cfg.get<number>("tokenLimit5h", 88000);
+  const projectsDir = cfg.get<string>("projectsDir", "");
+  try {
+    const messages = loadMessages(projectsDir || undefined);
+    lastLocalStats = buildStats(messages, tokenLimit5h);
+  } catch {
+    // se mantiene el último dato válido; no rompe la UI por un fallo de lectura puntual
+  }
+  render();
+}
+
+async function probeTick() {
+  if (probeInFlight) return;
+  const cfg = config();
+  if (!cfg.get<boolean>("preciseMode", true)) return;
+
+  probeInFlight = true;
+  const claudeBinary = cfg.get<string>("claudeBinaryPath", "") || "claude";
+  const result = await probeExactUsage(claudeBinary);
+  probeInFlight = false;
+
+  if (result.ok) {
+    lastPrecise = result.usage;
+    lastProbeError = undefined;
+  } else {
+    lastProbeError = result.reason;
+    // Se conserva el último `lastPrecise` válido (si lo hubo) en vez de descartarlo
+    // por un fallo puntual de red/CLI — solo se cae a estimación si nunca hubo probe OK.
+  }
+  render();
+}
+
 async function showDetails() {
-  if (!lastStats) {
-    refresh();
-  }
-  if (!lastStats) {
-    vscode.window.showWarningMessage("Claude Pulse: no hay datos de uso todavía.");
-    return;
-  }
-  const s = lastStats;
-  const w5h = s.windows["5h"];
-  const w24h = s.windows["24h"];
-  const w7d = s.windows["7d"];
+  const { pct, exact } = currentPct5h();
+  const lines: string[] = [];
 
-  const lines = [
-    `Ventana 5h: ${s.pct5h}% · ${formatCost(w5h.cost)} · ${w5h.requests} peticiones · reset en ${formatCountdown(s.secsToReset)}`,
-    `24h: ${formatCost(w24h.cost)} · ${w24h.requests} peticiones · ${w24h.totalTokens.toLocaleString()} tokens`,
-    `7d: ${formatCost(w7d.cost)} · ${w7d.requests} peticiones · ${w7d.totalTokens.toLocaleString()} tokens`,
-    `Total histórico: ${formatCost(s.allTime.cost)} · ${s.allTime.requests} peticiones`,
-  ];
+  if (lastPrecise) {
+    lines.push(
+      `5h (exacto): ${lastPrecise.fiveHour.utilizationPct.toFixed(1)}% · reset en ${formatCountdown(lastPrecise.fiveHour.resetAt)}`
+    );
+    lines.push(
+      `7d (exacto): ${lastPrecise.sevenDay.utilizationPct.toFixed(1)}% · reset en ${formatCountdown(lastPrecise.sevenDay.resetAt)}`
+    );
+  } else {
+    lines.push(`5h (≈ estimado): ${pct.toFixed(1)}%${exact ? "" : " — sin dato exacto todavía"}`);
+  }
 
-  const pick = await vscode.window.showQuickPick(lines, {
+  if (lastLocalStats) {
+    const w5h = lastLocalStats.windows["5h"];
+    const w24h = lastLocalStats.windows["24h"];
+    const w7d = lastLocalStats.windows["7d"];
+    lines.push(`Coste 5h: ${formatCost(w5h.cost)} · ${w5h.requests} peticiones`);
+    lines.push(`Coste 24h: ${formatCost(w24h.cost)} · ${w24h.requests} peticiones · ${w24h.totalTokens.toLocaleString()} tokens`);
+    lines.push(`Coste 7d: ${formatCost(w7d.cost)} · ${w7d.requests} peticiones · ${w7d.totalTokens.toLocaleString()} tokens`);
+    lines.push(`Total histórico: ${formatCost(lastLocalStats.allTime.cost)} · ${lastLocalStats.allTime.requests} peticiones`);
+  }
+  if (lastProbeError) {
+    lines.push(`⚠ Último probe falló: ${lastProbeError}`);
+  }
+
+  await vscode.window.showQuickPick(lines, {
     title: "Claude Pulse — Detalle de uso",
-    placeHolder: "Datos leídos de ~/.claude/projects/**/*.jsonl",
+    placeHolder: "5h/7d exactos vía probe a Anthropic · coste estimado localmente desde ~/.claude/projects",
   });
-  void pick;
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -107,26 +175,40 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBarItem);
 
   context.subscriptions.push(vscode.commands.registerCommand("claudePulse.showDetails", showDetails));
-  context.subscriptions.push(vscode.commands.registerCommand("claudePulse.refresh", refresh));
+  context.subscriptions.push(
+    vscode.commands.registerCommand("claudePulse.refresh", () => {
+      localTick();
+      void probeTick();
+    })
+  );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("claudePulse")) {
-        scheduleRefresh();
+        scheduleTimers();
       }
     })
   );
 
-  scheduleRefresh();
+  scheduleTimers();
+  void probeTick();
 }
 
-function scheduleRefresh() {
-  if (refreshTimer) clearInterval(refreshTimer);
-  refresh();
-  const seconds = config().get<number>("refreshIntervalSeconds", 15);
-  refreshTimer = setInterval(refresh, Math.max(5, seconds) * 1000);
+function scheduleTimers() {
+  if (localTickTimer) clearInterval(localTickTimer);
+  if (probeTimer) clearInterval(probeTimer);
+
+  localTick();
+
+  const cfg = config();
+  const localSeconds = Math.max(5, cfg.get<number>("refreshIntervalSeconds", 15));
+  localTickTimer = setInterval(localTick, localSeconds * 1000);
+
+  const probeSeconds = Math.max(30, cfg.get<number>("preciseProbeIntervalSeconds", 60));
+  probeTimer = setInterval(() => void probeTick(), probeSeconds * 1000);
 }
 
 export function deactivate() {
-  if (refreshTimer) clearInterval(refreshTimer);
+  if (localTickTimer) clearInterval(localTickTimer);
+  if (probeTimer) clearInterval(probeTimer);
 }

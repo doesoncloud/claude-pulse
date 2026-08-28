@@ -26,16 +26,32 @@
     "configuration": {
       "title": "Claude Pulse",
       "properties": {
+        "claudePulse.preciseMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Obtiene el % real de la ventana de 5h/7d directamente de Anthropic (lanzando `claude -p` en segundo plano cada cierto tiempo). Recomendado — sin esto, el % es solo una estimación local imprecisa. Desactívalo si no quieres que la extensión ejecute `claude` periódicamente."
+        },
+        "claudePulse.preciseProbeIntervalSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 30,
+          "description": "Cada cuántos segundos se consulta a Anthropic el % exacto (solo si preciseMode está activo). Cada consulta es una petición real mínima (~$0.0002) vía `claude -p --no-session-persistence` — no sube de 30s para no abusar."
+        },
+        "claudePulse.claudeBinaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Ruta al binario `claude` si no está en el PATH de VS Code (vacío = usar `claude` del PATH)."
+        },
         "claudePulse.tokenLimit5h": {
           "type": "number",
           "default": 88000,
-          "description": "Tokens de salida estimados para el 100% de la ventana de 5h. Anthropic no publica el número exacto — ajusta según tu plan/experiencia."
+          "description": "Solo se usa como fallback si preciseMode está desactivado o el probe falla: tokens de salida estimados para el 100% de la ventana de 5h. Anthropic no publica el número exacto."
         },
         "claudePulse.refreshIntervalSeconds": {
           "type": "number",
           "default": 15,
           "minimum": 5,
-          "description": "Cada cuántos segundos se releen los ficheros de sesión de Claude Code."
+          "description": "Cada cuántos segundos se releen los ficheros locales de sesión (coste/tokens 24h-7d). No afecta al % exacto, que usa su propio intervalo (preciseProbeIntervalSeconds)."
         },
         "claudePulse.displayMode": {
           "type": "string",
@@ -56,7 +72,7 @@
     "watch": "node esbuild.js --watch",
     "check": "tsc --noEmit",
     "vscode:prepublish": "npm run build",
-    "package": "vsce package"
+    "package": "node -r ./scripts/node18-file-shim.js ./node_modules/.bin/vsce package --allow-missing-repository"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
