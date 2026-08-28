@@ -1,7 +1,13 @@
 # Claude Pulse
 
-Extensión de VS Code: barra de estado en tiempo real con el **% exacto** de uso
-de la ventana de rate-limit de Claude Code (5h y 7d), coste estimado y reset.
+Extensión de VS Code: panel persistente (como `vscode-pets` — dock en el área
+inferior junto a Terminal/Output, arrastrable a un lateral, minimizable) con
+una línea de pulso animada que refleja el **% exacto** de uso de la ventana
+de rate-limit de Claude Code (5h y 7d), coste estimado y reset. También deja
+un resumen compacto en la status bar.
+
+La línea late más rápido y cambia de color (verde → ámbar → rojo) según el %
+de la ventana de 5h.
 
 ## Cómo consigue el % exacto (no una estimación)
 
@@ -35,9 +41,13 @@ npm install
 ```
 
 Abre esta carpeta en VS Code y pulsa **F5** (`Run Extension`). Se abre una ventana
-"Extension Development Host" con la extensión activa — la barrita aparece a la
-derecha de la status bar. Guardar un `.ts` recompila solo (`npm run watch` corre
-como pre-launch task); recarga la ventana de dev host con `Cmd/Ctrl+R`.
+"Extension Development Host" con la extensión activa — el panel "Claude Pulse"
+aparece como pestaña junto a Terminal/Output/Problems (área inferior por
+defecto), y el resumen compacto en la status bar. Arrástralo a un lateral o al
+Explorer si prefieres esa ubicación — es la ubicación estándar de VS Code, se
+recuerda entre sesiones igual que cualquier otro panel. Guardar un `.ts`
+recompila solo (`npm run watch` corre como pre-launch task); recarga la
+ventana de dev host con `Cmd/Ctrl+R`.
 
 Para probarla como instalación real (persiste al cerrar VS Code):
 

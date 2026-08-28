@@ -4,13 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es
 
-Extensión de VS Code (TypeScript + esbuild). Barra de estado con el **% exacto**
-de uso de la ventana de rate-limit de 5h/7d de Claude Code + coste estimado.
-Ver `README.md` § "Cómo consigue el % exacto" para instalar/publicar y el
-mecanismo completo — resumen: sondea `claude -p --no-session-persistence` con
-`ANTHROPIC_LOG=debug` y parsea las cabeceras reales `anthropic-ratelimit-unified-*`
-de la respuesta de Anthropic (no una estimación por tokens). El coste en $ sí
-sigue siendo estimado localmente desde `~/.claude/projects/**/*.jsonl`.
+Extensión de VS Code (TypeScript + esbuild). Panel persistente estilo
+`vscode-pets` (dock en el área inferior, arrastrable) con una línea de pulso
+animada que refleja el **% exacto** de uso de la ventana de rate-limit de
+5h/7d de Claude Code + coste estimado, más un resumen compacto en la status
+bar. Ver `README.md` § "Cómo consigue el % exacto" para instalar/publicar y
+el mecanismo completo — resumen: sondea `claude -p --no-session-persistence`
+con `ANTHROPIC_LOG=debug` y parsea las cabeceras reales
+`anthropic-ratelimit-unified-*` de la respuesta de Anthropic (no una
+estimación por tokens). El coste en $ sí sigue siendo estimado localmente
+desde `~/.claude/projects/**/*.jsonl`.
 
 El coste ($) reutiliza la misma lógica que `~/stacks/claude-dash/app/app.py`
 (dashboard Flask del homelab) pero portada a TypeScript client-side, sin
@@ -37,11 +40,17 @@ Test manual: F5 en VS Code abre el Extension Development Host con la extensión 
   lanza `claude -p` y parsea las cabeceras `anthropic-ratelimit-unified-*` del log
   de depuración. Fuente del **% exacto**. Testeable de forma aislada (`execFile`
   mockeable).
-- `src/extension.ts` — capa VS Code: `StatusBarItem`, comandos (`claudePulse.showDetails`,
+- `src/panel.ts` — `PulsePanelProvider` (`WebviewViewProvider`): renderiza el
+  panel persistente (línea de pulso SVG animada vía CSS, velocidad/color según
+  el %). HTML inline con nonce/CSP, comunicación por `postMessage` — sin
+  dependencias externas, sin framework.
+- `src/extension.ts` — capa VS Code: `StatusBarItem` + registro del
+  `WebviewViewProvider`, comandos (`claudePulse.showDetails`,
   `claudePulse.refresh`), dos timers independientes (`localTick` cada
   `refreshIntervalSeconds` para coste/tokens, `probeTick` cada
   `preciseProbeIntervalSeconds` para el % exacto) — desacoplados a propósito:
   el % exacto es caro de refrescar (llamada real), el coste local es gratis.
+  Cada tick empuja los datos al panel vía `panelProvider.update()`.
 
 ## Convenciones de precios
 

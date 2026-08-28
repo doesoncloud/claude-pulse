@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import { buildStats, loadMessages, Stats } from "./usage";
 import { probeExactUsage, PreciseUsage } from "./preciseUsage";
+import { PulsePanelProvider, PanelData } from "./panel";
 
 let statusBarItem: vscode.StatusBarItem;
+let panelProvider: PulsePanelProvider;
 let localTickTimer: NodeJS.Timeout | undefined;
 let probeTimer: NodeJS.Timeout | undefined;
 let probeInFlight = false;
@@ -65,6 +67,27 @@ function render() {
   statusBarItem.text = `${icon} ${bar} ${label}`;
   statusBarItem.tooltip = buildTooltip(exact);
   statusBarItem.show();
+
+  panelProvider?.update(buildPanelData(pct, exact));
+}
+
+function buildPanelData(pct5h: number, exact: boolean): PanelData {
+  const w5h = lastLocalStats?.windows["5h"];
+  const w24h = lastLocalStats?.windows["24h"];
+  const w7d = lastLocalStats?.windows["7d"];
+  return {
+    pct5h,
+    exact,
+    reset5hEpochMs: resetTarget5h()?.getTime() ?? null,
+    pct7d: lastPrecise?.sevenDay.utilizationPct ?? null,
+    reset7dEpochMs: lastPrecise?.sevenDay.resetAt.getTime() ?? null,
+    cost5h: w5h?.cost ?? 0,
+    cost24h: w24h?.cost ?? 0,
+    cost7d: w7d?.cost ?? 0,
+    requests5h: w5h?.requests ?? 0,
+    overallStatus: lastPrecise?.overallStatus ?? null,
+    probeError: lastProbeError ?? null,
+  };
 }
 
 function buildTooltip(exact: boolean): vscode.MarkdownString {
@@ -173,6 +196,11 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.command = "claudePulse.showDetails";
   context.subscriptions.push(statusBarItem);
+
+  panelProvider = new PulsePanelProvider();
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(PulsePanelProvider.viewId, panelProvider)
+  );
 
   context.subscriptions.push(vscode.commands.registerCommand("claudePulse.showDetails", showDetails));
   context.subscriptions.push(
