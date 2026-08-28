@@ -1,12 +1,22 @@
 # Claude Pulse
 
-Extensión de VS Code: panel persistente (como `vscode-pets` — dock en el área
-inferior junto a Terminal/Output, arrastrable a un lateral, minimizable) con
-una línea de pulso animada que refleja el **% exacto** de uso de la ventana
-de rate-limit de Claude Code (5h y 7d), coste estimado y reset. También deja
-un resumen compacto en la status bar.
+Extensión de VS Code: indicador en la status bar con el **% exacto** de uso
+de la ventana de rate-limit de Claude Code (5h y 7d) — click abre un detalle
+enriquecido (QuickPick con secciones/iconos por severidad). Además, un panel
+opcional (dock en el área inferior junto a Terminal/Output, estilo
+`vscode-pets`) con una línea de pulso animada en vivo para quien quiera
+dejarlo fijo.
 
-La línea late más rápido y cambia de color (verde → ámbar → rojo) según el %
+**Sobre el "flyout anclado a la status bar"**: se evaluó y descartó — VS Code
+no expone a las extensiones ninguna API para crear una ventana flotante
+posicionada junto a un elemento arbitrario (tipo menú de inicio de Windows).
+Los primitivos reales son QuickPick (transient, animación nativa, pero
+posición fija centrada arriba — la que usamos para el detalle), el tooltip de
+status bar (sí anclado, pero solo con hover, no click) y las vistas dockeadas
+(el panel). Documentado por si se reabre la decisión más adelante.
+
+La línea del panel late más rápido y su color interpola por un degradado
+continuo de 5 paradas (azul → verde → amarillo → ámbar → naranja) según el %
 de la ventana de 5h.
 
 ## Cómo consigue el % exacto (no una estimación)
@@ -104,3 +114,14 @@ Cambiar `publisher` en `package.json` de `CHANGEME` al id real antes de publicar
   `~/.claude/projects/**/*.jsonl` localmente — global (todas las sesiones del
   host), no solo del workspace actual, porque la ventana de rate-limit es de
   cuenta, no por proyecto.
+- **Coste solo si es accionable**: `detectUsingApiTokens()` (`claude auth
+  status` → `authMethod`) distingue suscripción (Pro/Max/Team, coste en $ no
+  aplica — plan fijo) de API key de pago (coste sí es dinero real). Con
+  suscripción, el coste se oculta de la status bar/panel y se sustituye por
+  el tiempo hasta el reset; sigue accesible en el detalle (QuickPick) y
+  plegado en el panel.
+- **Colores de severidad**: el panel usa un degradado RGB continuo (CSS, sin
+  restricción). El QuickPick, al ser UI nativa, solo admite `ThemeColor` de
+  la paleta registrada de VS Code (`charts.blue/green/yellow/orange`) — se
+  discretiza a 4 escalones en vez de interpolar, es una limitación de esa API,
+  no una elección de diseño.

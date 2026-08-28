@@ -39,10 +39,6 @@
       {
         "command": "claudePulse.refresh",
         "title": "Claude Pulse: Refrescar ahora"
-      },
-      {
-        "command": "claudePulse.reveal",
-        "title": "Claude Pulse: Mostrar panel"
       }
     ],
     "configuration": {

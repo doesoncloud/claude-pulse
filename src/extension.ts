@@ -163,46 +163,101 @@ async function probeTick() {
   render();
 }
 
-async function showDetails() {
-  const { pct, exact } = currentPct5h();
-  const lines: string[] = [];
+interface DetailItem extends vscode.QuickPickItem {
+  action?: "refresh" | "openPanel";
+}
+
+const SEP: DetailItem = { label: "", kind: vscode.QuickPickItemKind.Separator };
+
+/** Bucket de color por severidad, usando los theme-color IDs reales de VS Code
+ * (no admiten RGB arbitrario) — misma progresión que el degradado del panel,
+ * discretizada: azul -> verde -> amarillo -> naranja. */
+function severityIcon(pct: number): vscode.ThemeIcon {
+  const colorId = pct < 20 ? "charts.blue" : pct < 40 ? "charts.green" : pct < 60 ? "charts.yellow" : "charts.orange";
+  return new vscode.ThemeIcon("circle-large-filled", new vscode.ThemeColor(colorId));
+}
+
+function showDetails(): void {
+  const qp = vscode.window.createQuickPick<DetailItem>();
+  qp.title = "$(pulse) Claude Pulse";
+  qp.placeholder = "5h/7d exactos vía Anthropic · coste local desde ~/.claude/projects";
+
+  const items: DetailItem[] = [];
+  const { pct: pct5h, exact } = currentPct5h();
+
+  items.push(SEP, { label: "Ventana 5h", kind: vscode.QuickPickItemKind.Separator });
+  items.push({
+    label: `${pct5h.toFixed(0)}%`,
+    description: exact ? "dato exacto de Anthropic" : "≈ estimado local",
+    detail: `reset en ${formatCountdown(resetTarget5h())}`,
+    iconPath: severityIcon(pct5h),
+  });
 
   if (lastPrecise) {
-    lines.push(
-      `5h (exacto): ${lastPrecise.fiveHour.utilizationPct.toFixed(1)}% · reset en ${formatCountdown(lastPrecise.fiveHour.resetAt)}`
-    );
-    lines.push(
-      `7d (exacto): ${lastPrecise.sevenDay.utilizationPct.toFixed(1)}% · reset en ${formatCountdown(lastPrecise.sevenDay.resetAt)}`
-    );
-  } else {
-    lines.push(`5h (≈ estimado): ${pct.toFixed(1)}%${exact ? "" : " — sin dato exacto todavía"}`);
+    items.push({ label: "Ventana 7d", kind: vscode.QuickPickItemKind.Separator });
+    items.push({
+      label: `${lastPrecise.sevenDay.utilizationPct.toFixed(0)}%`,
+      description: "dato exacto de Anthropic",
+      detail: `reset en ${formatCountdown(lastPrecise.sevenDay.resetAt)}`,
+      iconPath: severityIcon(lastPrecise.sevenDay.utilizationPct),
+    });
+    if (lastPrecise.overallStatus !== "allowed") {
+      items.push({
+        label: `⚠ Estado: ${lastPrecise.overallStatus}`,
+        iconPath: new vscode.ThemeIcon("warning", new vscode.ThemeColor("charts.orange")),
+      });
+    }
   }
 
   if (lastLocalStats) {
     const w5h = lastLocalStats.windows["5h"];
-    const w24h = lastLocalStats.windows["24h"];
-    const w7d = lastLocalStats.windows["7d"];
-    lines.push(`Coste 5h: ${formatCost(w5h.cost)} · ${w5h.requests} peticiones`);
-    lines.push(`Coste 24h: ${formatCost(w24h.cost)} · ${w24h.requests} peticiones · ${w24h.totalTokens.toLocaleString()} tokens`);
-    lines.push(`Coste 7d: ${formatCost(w7d.cost)} · ${w7d.requests} peticiones · ${w7d.totalTokens.toLocaleString()} tokens`);
-    lines.push(`Total histórico: ${formatCost(lastLocalStats.allTime.cost)} · ${lastLocalStats.allTime.requests} peticiones`);
-  }
-  if (lastProbeError) {
-    lines.push(`⚠ Último probe falló: ${lastProbeError}`);
+    items.push({ label: "Actividad", kind: vscode.QuickPickItemKind.Separator });
+    items.push({ label: `${w5h.requests} peticiones`, description: "en la ventana de 5h" });
+
+    if (usingApiTokens) {
+      const w24h = lastLocalStats.windows["24h"];
+      const w7d = lastLocalStats.windows["7d"];
+      items.push({ label: "Coste", kind: vscode.QuickPickItemKind.Separator });
+      items.push({ label: formatCost(w5h.cost), description: "últimas 5h" });
+      items.push({ label: formatCost(w24h.cost), description: "últimas 24h" });
+      items.push({ label: formatCost(w7d.cost), description: "últimos 7d" });
+      items.push({ label: formatCost(lastLocalStats.allTime.cost), description: "histórico total" });
+    } else {
+      items.push({
+        label: "Plan con suscripción",
+        description: "el coste en $ no aplica — plan fijo",
+        iconPath: new vscode.ThemeIcon("info"),
+      });
+    }
   }
 
-  await vscode.window.showQuickPick(lines, {
-    title: "Claude Pulse — Detalle de uso",
-    placeHolder: "5h/7d exactos vía probe a Anthropic · coste estimado localmente desde ~/.claude/projects",
+  if (lastProbeError) {
+    items.push({ label: "Aviso", kind: vscode.QuickPickItemKind.Separator });
+    items.push({ label: `⚠ ${lastProbeError}`, description: "usando estimación local mientras tanto" });
+  }
+
+  items.push(SEP);
+  items.push({ label: "$(refresh) Refrescar ahora", action: "refresh" });
+  items.push({ label: "$(layout-panel) Abrir panel con el pulso en vivo", action: "openPanel" });
+
+  qp.items = items;
+  qp.onDidAccept(() => {
+    const picked = qp.selectedItems[0];
+    qp.hide();
+    if (picked?.action === "refresh") {
+      localTick();
+      void probeTick();
+    } else if (picked?.action === "openPanel") {
+      void vscode.commands.executeCommand(`${PulsePanelProvider.viewId}.focus`);
+    }
   });
+  qp.onDidHide(() => qp.dispose());
+  qp.show();
 }
 
 export function activate(context: vscode.ExtensionContext) {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  // Al clicar, revela el panel (dock inferior -> se despliega hacia arriba desde
-  // donde ya vive) en vez de un QuickPick, que VS Code siempre abre desde arriba
-  // como si fuera la paleta de comandos — desconectado visualmente del click.
-  statusBarItem.command = "claudePulse.reveal";
+  statusBarItem.command = "claudePulse.showDetails";
   context.subscriptions.push(statusBarItem);
 
   panelProvider = new PulsePanelProvider();
@@ -211,15 +266,6 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(vscode.commands.registerCommand("claudePulse.showDetails", showDetails));
-  context.subscriptions.push(
-    vscode.commands.registerCommand("claudePulse.reveal", async () => {
-      try {
-        await vscode.commands.executeCommand(`${PulsePanelProvider.viewId}.focus`);
-      } catch {
-        await showDetails();
-      }
-    })
-  );
   context.subscriptions.push(
     vscode.commands.registerCommand("claudePulse.refresh", () => {
       localTick();
