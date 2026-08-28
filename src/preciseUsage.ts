@@ -15,6 +15,31 @@ export interface PreciseUsage {
 
 export type ProbeResult = { ok: true; usage: PreciseUsage } | { ok: false; reason: string };
 
+/**
+ * Detecta si la sesión usa una suscripción (Pro/Max/Team, vía `claude.ai` OAuth
+ * — coste en $ no tiene sentido, se paga a plan fijo) o una API key de pago
+ * por token (donde el coste en $ sí es información accionable).
+ * Best-effort: si `claude auth status` falla o no es JSON, asume suscripción
+ * (comportamiento más conservador: oculta el coste en vez de mostrar uno
+ * potencialmente irrelevante).
+ */
+export function detectUsingApiTokens(claudeBinary: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile(claudeBinary, ["auth", "status"], { timeout: 10_000 }, (error, stdout) => {
+      if (error) {
+        resolve(false);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(stdout);
+        resolve(parsed.authMethod !== "claude.ai");
+      } catch {
+        resolve(false);
+      }
+    });
+  });
+}
+
 const PROBE_TIMEOUT_MS = 20_000;
 const PROBE_MODEL = "claude-haiku-4-5-20251001"; // el más barato — el probe solo lee cabeceras, la respuesta no importa
 

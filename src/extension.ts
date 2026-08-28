@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { buildStats, loadMessages, Stats } from "./usage";
-import { probeExactUsage, PreciseUsage } from "./preciseUsage";
+import { probeExactUsage, detectUsingApiTokens, PreciseUsage } from "./preciseUsage";
 import { PulsePanelProvider, PanelData } from "./panel";
 
 let statusBarItem: vscode.StatusBarItem;
@@ -12,6 +12,7 @@ let probeInFlight = false;
 let lastLocalStats: Stats | undefined;
 let lastPrecise: PreciseUsage | undefined;
 let lastProbeError: string | undefined;
+let usingApiTokens = false;
 
 const BAR_SEGMENTS = 10;
 
@@ -57,11 +58,14 @@ function render() {
   const { pct, exact } = currentPct5h();
   const bar = renderBar(pct);
   const cost5h = lastLocalStats?.windows["5h"].cost ?? 0;
+  // Con suscripción el coste en $ no es información accionable (plan fijo) — se
+  // sustituye por el tiempo hasta el próximo reset, que sí lo es siempre.
+  const secondary = usingApiTokens ? formatCost(cost5h) : formatCountdown(resetTarget5h());
 
   let label = "";
   if (displayMode === "percent") label = `${pct.toFixed(0)}%`;
-  else if (displayMode === "cost") label = formatCost(cost5h);
-  else label = `${pct.toFixed(0)}% · ${formatCost(cost5h)}`;
+  else if (displayMode === "cost") label = secondary;
+  else label = `${pct.toFixed(0)}% · ${secondary}`;
 
   const icon = exact ? "$(pulse)" : "$(pulse) ~";
   statusBarItem.text = `${icon} ${bar} ${label}`;
@@ -87,6 +91,7 @@ function buildPanelData(pct5h: number, exact: boolean): PanelData {
     requests5h: w5h?.requests ?? 0,
     overallStatus: lastPrecise?.overallStatus ?? null,
     probeError: lastProbeError ?? null,
+    usingApiTokens,
   };
 }
 
@@ -194,7 +199,10 @@ async function showDetails() {
 
 export function activate(context: vscode.ExtensionContext) {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.command = "claudePulse.showDetails";
+  // Al clicar, revela el panel (dock inferior -> se despliega hacia arriba desde
+  // donde ya vive) en vez de un QuickPick, que VS Code siempre abre desde arriba
+  // como si fuera la paleta de comandos — desconectado visualmente del click.
+  statusBarItem.command = "claudePulse.reveal";
   context.subscriptions.push(statusBarItem);
 
   panelProvider = new PulsePanelProvider();
@@ -203,6 +211,15 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(vscode.commands.registerCommand("claudePulse.showDetails", showDetails));
+  context.subscriptions.push(
+    vscode.commands.registerCommand("claudePulse.reveal", async () => {
+      try {
+        await vscode.commands.executeCommand(`${PulsePanelProvider.viewId}.focus`);
+      } catch {
+        await showDetails();
+      }
+    })
+  );
   context.subscriptions.push(
     vscode.commands.registerCommand("claudePulse.refresh", () => {
       localTick();
@@ -220,6 +237,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   scheduleTimers();
   void probeTick();
+
+  const claudeBinary = config().get<string>("claudeBinaryPath", "") || "claude";
+  void detectUsingApiTokens(claudeBinary).then((v) => {
+    usingApiTokens = v;
+    render();
+  });
 }
 
 function scheduleTimers() {
