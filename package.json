@@ -1,0 +1,68 @@
+{
+  "name": "claude-pulse",
+  "displayName": "Claude Pulse",
+  "description": "Barra de estado en tiempo real con el gasto y el % de uso de la ventana de rate-limit de Claude Code.",
+  "version": "0.0.1",
+  "publisher": "CHANGEME",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "keywords": ["claude", "claude code", "anthropic", "usage", "cost", "status bar"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudePulse.showDetails",
+        "title": "Claude Pulse: Ver detalle de uso"
+      },
+      {
+        "command": "claudePulse.refresh",
+        "title": "Claude Pulse: Refrescar ahora"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Pulse",
+      "properties": {
+        "claudePulse.tokenLimit5h": {
+          "type": "number",
+          "default": 88000,
+          "description": "Tokens de salida estimados para el 100% de la ventana de 5h. Anthropic no publica el número exacto — ajusta según tu plan/experiencia."
+        },
+        "claudePulse.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 15,
+          "minimum": 5,
+          "description": "Cada cuántos segundos se releen los ficheros de sesión de Claude Code."
+        },
+        "claudePulse.displayMode": {
+          "type": "string",
+          "enum": ["percent", "cost", "both"],
+          "default": "both",
+          "description": "Qué mostrar en la barra de estado además de la barrita visual."
+        },
+        "claudePulse.projectsDir": {
+          "type": "string",
+          "default": "",
+          "description": "Ruta a ~/.claude/projects si no está en la ubicación por defecto (vacío = autodetectar)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "check": "tsc --noEmit",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.4.0"
+  }
+}
