@@ -38,9 +38,9 @@ interface ModelPricing {
   cacheRead: number;
 }
 
-// USD por token. Cache write/read siguen la proporción estándar de Anthropic
-// (write ~1.25x input, read ~0.1x input) salvo que la tarifa oficial diga otra cosa.
-// Fuente: tabla de precios vigente de la skill claude-api de este mismo repo.
+// USD per token. Cache write/read follow Anthropic's standard ratio
+// (write ~1.25x input, read ~0.1x input) unless the official pricing says otherwise.
+// Source: current pricing table from the claude-api skill in this same repo.
 const PRICING: Record<string, ModelPricing> = {
   "claude-fable-5": { input: 10.0, output: 50.0, cacheCreation: 12.5, cacheRead: 1.0 },
   "claude-mythos-5": { input: 10.0, output: 50.0, cacheCreation: 12.5, cacheRead: 1.0 },
@@ -93,7 +93,7 @@ function walkJsonlFiles(dir: string): string[] {
   return out;
 }
 
-/** Lee todos los mensajes `assistant` con `usage` de todos los .jsonl de sesión de Claude Code. */
+/** Reads all `assistant` messages with `usage` from every Claude Code session .jsonl file. */
 export function loadMessages(projectsDirOverride?: string): UsageMessage[] {
   const projectsDir = resolveProjectsDir(projectsDirOverride);
   const messages: UsageMessage[] = [];

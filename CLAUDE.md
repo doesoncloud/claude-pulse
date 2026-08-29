@@ -2,61 +2,64 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Qué es
+## What this is
 
-Extensión de VS Code (TypeScript + esbuild). Indicador en la status bar con
-el **% exacto** de uso de la ventana de rate-limit de Claude Code — el
-detalle vive en el **tooltip** (hover, anclado a la status bar; es la única
-posición real que VS Code deja anclar ahí, ver README § "Por qué no hay
-flyout/panel"), con un GIF pequeño de pulso animado embebido (color según
-severidad) como detalle decorativo, no protagonista. Ver `README.md` §
-"Cómo consigue el % exacto" para el mecanismo completo — resumen: sondea
-`claude -p --no-session-persistence` con `ANTHROPIC_LOG=debug` y parsea las
-cabeceras reales `anthropic-ratelimit-unified-*` de la respuesta de
-Anthropic (no una estimación por tokens). El coste en $ sí sigue siendo
-estimado localmente desde `~/.claude/projects/**/*.jsonl`, y solo se muestra
-si la sesión usa API key de pago (no con suscripción, donde no aplica).
+A VS Code extension (TypeScript + esbuild). A status bar indicator showing
+the **exact %** of Claude Code's rate-limit window used — the detail lives
+in the **tooltip** (hover, anchored to the status bar; it's the only real
+position VS Code lets you anchor there, see README § "Why there's no
+flyout/panel"), with a small embedded animated pulse GIF (colored by
+severity) as a decorative, non-primary detail. See `README.md` § "How it
+gets the exact %" for the full mechanism — summary: it probes
+`claude -p --no-session-persistence` with `ANTHROPIC_LOG=debug` and parses
+the real `anthropic-ratelimit-unified-*` headers from Anthropic's response
+(not a token-based estimate). The $ cost is still estimated locally from
+`~/.claude/projects/**/*.jsonl`, and is only shown if the session uses a
+pay-per-token API key (not with a subscription, where it doesn't apply).
 
-El coste ($) reutiliza la misma lógica que `~/stacks/claude-dash/app/app.py`
-(dashboard Flask del homelab) pero portada a TypeScript client-side, sin
-dependencia de ese servicio — pensada para publicarse en el Marketplace.
+The cost ($) logic reuses the same approach as
+`~/stacks/claude-dash/app/app.py` (the homelab's Flask dashboard) but ported
+to client-side TypeScript, with no dependency on that service — built with
+Marketplace publishing in mind.
 
-## Comandos
+## Commands
 
 ```bash
 npm install
-npm run watch     # esbuild en modo watch (usado por F5 / Run Extension)
-npm run build     # build de producción (minificado)
-npm run check     # tsc --noEmit, chequeo de tipos
-npm run package   # vsce package -> genera el .vsix
+npm run watch     # esbuild in watch mode (used by F5 / Run Extension)
+npm run build     # production build (minified)
+npm run check     # tsc --noEmit, type checking
+npm run package   # vsce package -> generates the .vsix
 ```
 
-Test manual: F5 en VS Code abre el Extension Development Host con la extensión cargada.
+Manual test: F5 in VS Code opens the Extension Development Host with the extension loaded.
 
-## Arquitectura
+## Architecture
 
-- `src/usage.ts` — capa pura sin dependencia de `vscode`: lee los `.jsonl`, calcula
-  coste por modelo (`PRICING`, tabla embebida) y agrega en ventanas 5h/24h/7d
-  (`buildStats`). Fuente del **coste** ($), no del %. Testeable de forma aislada.
-- `src/preciseUsage.ts` — capa pura sin dependencia de `vscode`: `probeExactUsage()`
-  lanza `claude -p` y parsea las cabeceras `anthropic-ratelimit-unified-*` del log
-  de depuración. Fuente del **% exacto**. Testeable de forma aislada (`execFile`
-  mockeable).
-- `src/pulseAssets.ts` — 4 GIFs de pulso (azul/verde/amarillo/naranja, ~20KB
-  cada uno) generados con Pillow y embebidos en base64. Estático, no hay
-  script de build automático — regenerar a mano si cambia el diseño (ver
-  comentario en el propio fichero).
-- `src/extension.ts` — capa VS Code: `StatusBarItem` (texto + `tooltip`
-  `MarkdownString` como única vista de detalle — sin QuickPick, sin webview),
-  comando `claudePulse.refresh` (click en la barra = refresco manual), dos
-  timers independientes (`localTick` cada `refreshIntervalSeconds` para
-  coste/tokens, `probeTick` cada `preciseProbeIntervalSeconds` para el %
-  exacto) — desacoplados a propósito: el % exacto es caro de refrescar
-  (llamada real), el coste local es gratis.
+- `src/usage.ts` — pure layer with no `vscode` dependency: reads the `.jsonl`
+  files, computes per-model cost (`PRICING`, embedded table), and aggregates
+  into 5h/24h/7d windows (`buildStats`). Source of the **cost** ($), not the
+  %. Testable in isolation.
+- `src/preciseUsage.ts` — pure layer with no `vscode` dependency:
+  `probeExactUsage()` runs `claude -p` and parses the
+  `anthropic-ratelimit-unified-*` headers from the debug log. Source of the
+  **exact %**. Testable in isolation (`execFile` is mockable).
+- `src/pulseAssets.ts` — 4 pulse GIFs (blue/green/yellow/orange, ~20KB each)
+  generated with Pillow and embedded as base64. Static, no automated build
+  script — regenerate by hand if the design changes (see the comment in the
+  file itself).
+- `src/extension.ts` — VS Code layer: `StatusBarItem` (text + `tooltip`
+  `MarkdownString` as the only detail view — no QuickPick, no webview),
+  `claudePulse.refresh` command (clicking the bar = manual refresh), two
+  independent timers (`localTick` every `refreshIntervalSeconds` for
+  cost/tokens, `probeTick` every `preciseProbeIntervalSeconds` for the exact
+  %) — deliberately decoupled: the exact % is expensive to refresh (a real
+  call), the local cost is free.
 
-## Convenciones de precios
+## Pricing conventions
 
-Los precios en `PRICING` (`src/usage.ts`) son USD/token, derivados de la tabla oficial
-de Anthropic (input/output) más la proporción estándar de cache (write ≈1.25x input,
-read ≈0.1x input). Al añadir un modelo nuevo, usar la skill `claude-api` de este mismo
-repo (`/data/projects/`) para la tarifa vigente — no inventar precios.
+Prices in `PRICING` (`src/usage.ts`) are USD/token, derived from Anthropic's
+official pricing table (input/output) plus the standard cache ratio (write
+≈1.25x input, read ≈0.1x input). When adding a new model, use the
+`claude-api` skill from this same repo (`/data/projects/`) for the current
+rate — don't make up prices.

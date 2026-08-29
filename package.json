@@ -1,9 +1,14 @@
 {
   "name": "claude-pulse",
   "displayName": "Claude Pulse",
-  "description": "Barra de estado en tiempo real con el % exacto de uso de la ventana de rate-limit de Claude Code (dato real de Anthropic, no una estimación).",
+  "description": "Real-time status bar indicator for the exact % of your Claude Code rate-limit window used (real data from Anthropic, not an estimate).",
   "version": "0.1.0",
   "publisher": "CHANGEME",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#1e1b4b",
+    "theme": "dark"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -24,7 +29,7 @@
     "commands": [
       {
         "command": "claudePulse.refresh",
-        "title": "Claude Pulse: Refrescar ahora"
+        "title": "Claude Pulse: Refresh now"
       }
     ],
     "configuration": {
@@ -33,40 +38,40 @@
         "claudePulse.preciseMode": {
           "type": "boolean",
           "default": true,
-          "description": "Obtiene el % real de la ventana de 5h/7d directamente de Anthropic (lanzando `claude -p` en segundo plano cada cierto tiempo). Recomendado — sin esto, el % es solo una estimación local imprecisa. Desactívalo si no quieres que la extensión ejecute `claude` periódicamente."
+          "description": "Fetches the real 5h/7d window % directly from Anthropic (running `claude -p` in the background periodically). Recommended — without this, the % is just an imprecise local estimate. Turn it off if you don't want the extension to run `claude` periodically."
         },
         "claudePulse.preciseProbeIntervalSeconds": {
           "type": "number",
           "default": 60,
           "minimum": 30,
-          "description": "Cada cuántos segundos se consulta a Anthropic el % exacto (solo si preciseMode está activo). Cada consulta es una petición real mínima (~$0.0002) vía `claude -p --no-session-persistence` — no sube de 30s para no abusar."
+          "description": "How often (in seconds) to query Anthropic for the exact % (only if preciseMode is on). Each query is a minimal real request (~$0.0002) via `claude -p --no-session-persistence` — kept at 30s minimum to avoid abuse."
         },
         "claudePulse.claudeBinaryPath": {
           "type": "string",
           "default": "",
-          "description": "Ruta al binario `claude` si no está en el PATH de VS Code (vacío = usar `claude` del PATH)."
+          "description": "Path to the `claude` binary if it's not on VS Code's PATH (empty = use `claude` from PATH)."
         },
         "claudePulse.tokenLimit5h": {
           "type": "number",
           "default": 88000,
-          "description": "Solo se usa como fallback si preciseMode está desactivado o el probe falla: tokens de salida estimados para el 100% de la ventana de 5h. Anthropic no publica el número exacto."
+          "description": "Only used as a fallback if preciseMode is off or the probe fails: estimated output tokens for 100% of the 5h window. Anthropic doesn't publish the exact number."
         },
         "claudePulse.refreshIntervalSeconds": {
           "type": "number",
           "default": 15,
           "minimum": 5,
-          "description": "Cada cuántos segundos se releen los ficheros locales de sesión (coste/tokens 24h-7d). No afecta al % exacto, que usa su propio intervalo (preciseProbeIntervalSeconds)."
+          "description": "How often (in seconds) local session files are re-read (24h-7d cost/tokens). Doesn't affect the exact %, which uses its own interval (preciseProbeIntervalSeconds)."
         },
         "claudePulse.displayMode": {
           "type": "string",
           "enum": ["percent", "cost", "both"],
           "default": "both",
-          "description": "Qué mostrar en la barra de estado además de la barrita visual."
+          "description": "What to show in the status bar next to the visual bar."
         },
         "claudePulse.projectsDir": {
           "type": "string",
           "default": "",
-          "description": "Ruta a ~/.claude/projects si no está en la ubicación por defecto (vacío = autodetectar)."
+          "description": "Path to ~/.claude/projects if it's not in the default location (empty = autodetect)."
         }
       }
     }

@@ -14,8 +14,8 @@ let lastProbeError: string | undefined;
 let usingApiTokens = false;
 
 const BAR_SEGMENTS = 8;
-// Bloques de octavo de carácter (▏..█) para una barra con resolución subcaracter
-// — más suave que alternar solo entre "lleno"/"vacío" a cada uno de los N huecos.
+// Eighth-block characters (▏..█) for a sub-character-resolution bar
+// — smoother than just toggling "full"/"empty" on each of the N slots.
 const EIGHTHS = ["▏", "▎", "▍", "▌", "▋", "▊", "▉"];
 
 function renderBar(pct: number): string {
@@ -36,9 +36,9 @@ function formatCost(cost: number): string {
 }
 
 function formatCountdown(target: Date | null): string {
-  if (!target) return "sin datos";
+  if (!target) return "no data";
   const secs = Math.floor((target.getTime() - Date.now()) / 1000);
-  if (secs <= 0) return "reseteando...";
+  if (secs <= 0) return "resetting...";
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   return `${h}h ${m}m`;
@@ -48,7 +48,7 @@ function config() {
   return vscode.workspace.getConfiguration("claudePulse");
 }
 
-/** % a mostrar: exacto de Anthropic si el probe funcionó, si no, estimación local. */
+/** % to display: exact from Anthropic if the probe succeeded, otherwise a local estimate. */
 function currentPct5h(): { pct: number; exact: boolean } {
   if (lastPrecise) return { pct: lastPrecise.fiveHour.utilizationPct, exact: true };
   if (lastLocalStats) return { pct: lastLocalStats.pct5h, exact: false };
@@ -61,8 +61,8 @@ function resetTarget5h(): Date | null {
   return null;
 }
 
-/** 4 escalones de severidad — mismo bucket para el color del icono de la status
- * bar (ThemeColor `charts.*`) y para elegir el GIF de pulso correspondiente. */
+/** 4 severity tiers — same bucket drives the status bar icon color
+ * (ThemeColor `charts.*`) and picks the matching pulse GIF. */
 function severityBucket(pct: number): "blue" | "green" | "yellow" | "orange" {
   if (pct < 20) return "blue";
   if (pct < 40) return "green";
@@ -76,8 +76,8 @@ function render() {
   const { pct, exact } = currentPct5h();
   const bar = renderBar(pct);
   const cost5h = lastLocalStats?.windows["5h"].cost ?? 0;
-  // Con suscripción el coste en $ no es información accionable (plan fijo) — se
-  // sustituye por el tiempo hasta el próximo reset, que sí lo es siempre.
+  // With a subscription, $ cost isn't actionable information (fixed plan) — it's
+  // replaced by the time until the next reset, which always is.
   const secondary = usingApiTokens ? formatCost(cost5h) : formatCountdown(resetTarget5h());
 
   let label = "";
@@ -93,40 +93,40 @@ function render() {
 }
 
 function buildTooltip(pct5h: number, exact: boolean): vscode.MarkdownString {
-  const md = new vscode.MarkdownString(undefined, true); // supportThemeIcons -> permite $(icono) inline
+  const md = new vscode.MarkdownString(undefined, true); // supportThemeIcons -> allows inline $(icon)
   const gif = PULSE_GIF_BASE64[severityBucket(pct5h)];
 
   md.appendMarkdown(`$(pulse) **Claude Pulse**\n\n`);
-  md.appendMarkdown(`![pulso](data:image/gif;base64,${gif})\n\n`);
+  md.appendMarkdown(`![pulse](data:image/gif;base64,${gif})\n\n`);
 
-  md.appendMarkdown(`**${pct5h.toFixed(0)}%** ventana de 5h`);
-  md.appendMarkdown(exact ? ` &nbsp;·&nbsp; dato exacto\n\n` : ` &nbsp;·&nbsp; ≈ estimado local\n\n`);
-  md.appendMarkdown(`$(clock)&nbsp;reset en **${formatCountdown(resetTarget5h())}**\n\n`);
+  md.appendMarkdown(`**${pct5h.toFixed(0)}%** 5h window`);
+  md.appendMarkdown(exact ? ` &nbsp;·&nbsp; exact data\n\n` : ` &nbsp;·&nbsp; ≈ local estimate\n\n`);
+  md.appendMarkdown(`$(clock)&nbsp;reset in **${formatCountdown(resetTarget5h())}**\n\n`);
 
   if (lastPrecise) {
     md.appendMarkdown(
-      `$(graph-line)&nbsp;**${lastPrecise.sevenDay.utilizationPct.toFixed(0)}%** ventana de 7 días &nbsp;·&nbsp; reset en ${formatCountdown(lastPrecise.sevenDay.resetAt)}\n\n`
+      `$(graph-line)&nbsp;**${lastPrecise.sevenDay.utilizationPct.toFixed(0)}%** 7-day window &nbsp;·&nbsp; reset in ${formatCountdown(lastPrecise.sevenDay.resetAt)}\n\n`
     );
     if (lastPrecise.overallStatus !== "allowed") {
-      md.appendMarkdown(`$(warning)&nbsp;Estado de la cuenta: **${lastPrecise.overallStatus}**\n\n`);
+      md.appendMarkdown(`$(warning)&nbsp;Account status: **${lastPrecise.overallStatus}**\n\n`);
     }
   }
 
   if (lastLocalStats) {
     const w5h = lastLocalStats.windows["5h"];
-    md.appendMarkdown(`_${w5h.requests} peticiones en esta ventana_\n\n`);
+    md.appendMarkdown(`_${w5h.requests} requests in this window_\n\n`);
 
     if (usingApiTokens) {
       const w24h = lastLocalStats.windows["24h"];
       const w7d = lastLocalStats.windows["7d"];
       md.appendMarkdown(
-        `_Coste — 5h ${formatCost(w5h.cost)} · 24h ${formatCost(w24h.cost)} · 7d ${formatCost(w7d.cost)} · histórico ${formatCost(lastLocalStats.allTime.cost)}_\n\n`
+        `_Cost — 5h ${formatCost(w5h.cost)} · 24h ${formatCost(w24h.cost)} · 7d ${formatCost(w7d.cost)} · all-time ${formatCost(lastLocalStats.allTime.cost)}_\n\n`
       );
     }
   }
 
   if (lastProbeError) {
-    md.appendMarkdown(`$(warning)&nbsp;_${lastProbeError} — estimación local mientras tanto_\n\n`);
+    md.appendMarkdown(`$(warning)&nbsp;_${lastProbeError} — using local estimate for now_\n\n`);
   }
 
   return md;
@@ -140,7 +140,7 @@ function localTick() {
     const messages = loadMessages(projectsDir || undefined);
     lastLocalStats = buildStats(messages, tokenLimit5h);
   } catch {
-    // se mantiene el último dato válido; no rompe la UI por un fallo de lectura puntual
+    // keeps the last valid data; a one-off read failure shouldn't break the UI
   }
   render();
 }
@@ -160,16 +160,16 @@ async function probeTick() {
     lastProbeError = undefined;
   } else {
     lastProbeError = result.reason;
-    // Se conserva el último `lastPrecise` válido (si lo hubo) en vez de descartarlo
-    // por un fallo puntual de red/CLI — solo se cae a estimación si nunca hubo probe OK.
+    // Keeps the last valid `lastPrecise` (if any) instead of discarding it over
+    // a one-off network/CLI failure — only falls back to estimate if no probe ever succeeded.
   }
   render();
 }
 
 export function activate(context: vscode.ExtensionContext) {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  // El detalle vive en el tooltip (hover) — es la posición anclada real que se
-  // puede conseguir junto a la status bar. El click dispara un refresco manual.
+  // The detail lives in the tooltip (hover) — it's the only real anchored
+  // position achievable next to the status bar. Click triggers a manual refresh.
   statusBarItem.command = "claudePulse.refresh";
   context.subscriptions.push(statusBarItem);
 

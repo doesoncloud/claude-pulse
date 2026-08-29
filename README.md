@@ -1,151 +1,147 @@
 # Claude Pulse
 
-**Un indicador en tiempo real, en la propia status bar de VS Code, del % exacto
-que llevas consumido de tu ventana de uso de Claude Code — con el dato real
-que usa Anthropic, no una estimación.**
+**A real-time indicator, right in VS Code's own status bar, of the exact %
+you've used of your Claude Code usage window — with the real figure
+Anthropic uses, not an estimate.**
 
-Si usas Claude Code a diario, seguramente ya conoces la sorpresa de que te
-corte a mitad de tarea porque has agotado la ventana de 5 horas sin enterarte.
-Claude Pulse pone ese dato a la vista, todo el tiempo, sin salir del editor.
+If you use Claude Code daily, you've probably already hit the surprise of
+getting cut off mid-task because you ran out of your 5-hour window without
+noticing. Claude Pulse puts that number in view, all the time, without
+leaving the editor.
 
-![Ejemplo del pulso en naranja, cerca del límite](docs/media/pulse-orange.gif)
+![Pulse example in orange, near the limit](docs/media/pulse-orange.gif)
 
-## Qué hace
+## What it does
 
-- Un icono en la status bar (esquina inferior derecha) con una **barra de
-  progreso** y el **% de la ventana de rate-limit de 5 horas**.
-- El icono y la barra **cambian de color** según cuánto llevas consumido —
-  de un vistazo, sin tener que leer el número.
-- Al pasar el ratón por encima, un **tooltip enriquecido** con el detalle: %
-  de la ventana de 5h y de 7 días, cuenta atrás hasta el próximo reset,
-  peticiones realizadas, y coste en $ (si aplica — ver más abajo).
-- Cero telemetría, cero red salvo la propia consulta a Anthropic para leer tu
-  dato de uso real. Todo lo demás se calcula localmente.
+- A status bar icon (bottom-right corner) with a **progress bar** and the
+  **% of the 5-hour rate-limit window**.
+- The icon and bar **change color** based on how much you've used — at a
+  glance, without having to read the number.
+- Hovering shows a **rich tooltip** with the detail: % of the 5h and 7-day
+  windows, countdown to the next reset, requests made, and cost in $ (if
+  applicable — see below).
+- Zero telemetry, zero network calls except the query to Anthropic itself to
+  read your real usage figure. Everything else is computed locally.
 
-## El dato es exacto, no una estimación
+## The figure is exact, not an estimate
 
-Esto es lo que diferencia a Claude Pulse: **no cuenta tokens para adivinar un
-porcentaje**. Anthropic no publica en ningún sitio el límite exacto de la
-ventana de 5 horas — cualquier extensión que intente calcularlo a partir de
-tokens está adivinando.
+This is what sets Claude Pulse apart: **it doesn't count tokens to guess a
+percentage**. Anthropic doesn't publish the exact limit of the 5-hour window
+anywhere — any extension that tries to compute it from tokens is guessing.
 
-En su lugar, Claude Pulse pregunta directamente a Anthropic: cada respuesta
-autenticada de la API incluye cabeceras (`anthropic-ratelimit-unified-5h-utilization`,
-`-7d-utilization`) con el **porcentaje real, calculado por el servidor** — el
-mismo dato que usa el comando `/usage` de Claude Code. Claude Pulse lanza
-periódicamente una consulta mínima (`claude -p "1" --no-session-persistence`,
-sin dejar rastro en tu historial de sesiones, coste real ≈$0.0002 por
-consulta) y lee esas cabeceras. Por defecto cada 60 segundos.
+Instead, Claude Pulse asks Anthropic directly: every authenticated API
+response includes headers (`anthropic-ratelimit-unified-5h-utilization`,
+`-7d-utilization`) with the **real, server-computed percentage** — the same
+data used by Claude Code's own `/usage` command. Claude Pulse periodically
+runs a minimal query (`claude -p "1" --no-session-persistence`, leaving no
+trace in your session history, real cost ≈$0.0002 per query) and reads those
+headers. Every 60 seconds by default.
 
-Si esa consulta falla (sin conexión, CLI desactualizado), Claude Pulse cae a
-una estimación local a partir de tus sesiones — y te lo dice explícitamente
-en el tooltip (nunca presenta una estimación como si fuera el dato exacto).
+If that query fails (no connection, outdated CLI), Claude Pulse falls back
+to a local estimate based on your sessions — and says so explicitly in the
+tooltip (it never presents an estimate as if it were the exact figure).
 
-## Gama de colores
+## Color scale
 
-| Color | Rango | Qué significa |
+| Color | Range | What it means |
 |---|:---:|---|
-| 🔵 Azul | 0–19% | Apenas has empezado la ventana. Tranquilo. |
-| 🟢 Verde | 20–39% | Uso normal, sin nada de qué preocuparte. |
-| 🟡 Amarillo | 40–59% | Vas por la mitad — vale la pena vigilar el ritmo si te queda tarea larga por delante. |
-| 🟠 Naranja | 60–100% | Te acercas al límite. Si el reset está lejos, es buen momento para planificar una pausa. |
+| 🔵 Blue | 0–19% | You've barely started the window. Relax. |
+| 🟢 Green | 20–39% | Normal usage, nothing to worry about. |
+| 🟡 Yellow | 40–59% | You're halfway through — worth watching your pace if there's a long task ahead. |
+| 🟠 Orange | 60–100% | You're approaching the limit. If the reset is far off, it's a good time to plan a break. |
 
-### Ejemplos
+### Examples
 
-| | | |
-|:---:|:---:|:---:|
-| ![Azul](docs/media/pulse-blue.gif) | ![Verde](docs/media/pulse-green.gif) | ![Amarillo](docs/media/pulse-yellow.gif) |
-| **12%** · tranquilo | **34%** · uso normal | **52%** · uso moderado |
+| | | | |
+|:---:|:---:|:---:|:---:|
+| ![Blue](docs/media/pulse-blue.gif) | ![Green](docs/media/pulse-green.gif) | ![Yellow](docs/media/pulse-yellow.gif) | ![Orange](docs/media/pulse-orange.gif) |
+| **12%** · relaxed | **34%** · normal usage | **52%** · moderate usage | **88%** · near the limit |
 
-| |
-|:---:|
-| ![Naranja](docs/media/pulse-orange.gif) |
-| **88%** · cerca del límite |
-
-Así se ve en la status bar (texto ilustrativo, la barra usa bloques Unicode de
-resolución subcaracter — más precisa que un simple lleno/vacío):
+Here's how it looks in the status bar (illustrative text — the bar actually
+uses sub-character-resolution Unicode blocks, more precise than a simple
+full/empty toggle):
 
 ```
-🔵  ▍·······   12% · 4h 48m restantes
-🟢  ▉▉▍·····   34% · 3h 12m restantes
-🟡  ▉▉▉▉▍···   52% · 2h 20m restantes
-🟠  ▉▉▉▉▉▉▉▍   88% · 41m restantes
+🔵  ▍·······   12% · 4h 48m left
+🟢  ▉▉▍·····   34% · 3h 12m left
+🟡  ▉▉▉▉▍···   52% · 2h 20m left
+🟠  ▉▉▉▉▉▉▉▍   88% · 41m left
 ```
 
-## Coste en $ — solo cuando importa
+## Cost in $ — only when it matters
 
-Si usas **Claude Code con suscripción** (Pro/Max/Team), el coste en dólares no
-es información accionable: pagas un plan fijo, no por token. En ese caso
-Claude Pulse lo oculta de la vista principal y muestra en su lugar el tiempo
-restante hasta el próximo reset — el dato que sí puedes usar para planificar.
+If you use **Claude Code with a subscription** (Pro/Max/Team), cost in
+dollars isn't actionable information — you pay a fixed plan, not per token.
+In that case Claude Pulse hides it from the main view and shows instead the
+time remaining until the next reset — the figure you can actually use to
+plan.
 
-Si en cambio usas una **API key de pago por token**, el coste sí es dinero
-real — Claude Pulse lo detecta automáticamente (`claude auth status`) y lo
-muestra en el tooltip: gasto de las últimas 5h, 24h, 7 días e histórico,
-calculado a partir de tus sesiones locales y la tabla de precios oficial de
-Anthropic.
+If instead you use a **pay-per-token API key**, cost is real money —
+Claude Pulse detects this automatically (`claude auth status`) and shows it
+in the tooltip: spend over the last 5h, 24h, 7 days, and all-time, computed
+from your local sessions and Anthropic's official pricing table.
 
-## Instalación
+## Installation
 
-Todavía no está publicada en el Marketplace (llegará en una versión
-posterior). Mientras tanto, instálala desde el `.vsix`:
+Not yet published to the Marketplace (coming in a later release). In the
+meantime, install it from the `.vsix`:
 
 ```bash
 git clone https://github.com/doesoncloud/claude-pulse.git
 cd claude-pulse
 npm install
-npm run package                      # genera claude-pulse-<versión>.vsix
-code --install-extension claude-pulse-<versión>.vsix
+npm run package                      # generates claude-pulse-<version>.vsix
+code --install-extension claude-pulse-<version>.vsix
 ```
 
-Recarga VS Code (`Developer: Reload Window`) y busca el icono en la esquina
-inferior derecha de la status bar.
+Reload VS Code (`Developer: Reload Window`) and look for the icon in the
+bottom-right corner of the status bar.
 
-## Configuración
+## Configuration
 
-| Setting | Default | Qué hace |
+| Setting | Default | What it does |
 |---|---|---|
-| `claudePulse.preciseMode` | `true` | Sondea el % exacto a Anthropic. Desactivar = solo estimación local, sin ejecutar `claude`. |
-| `claudePulse.preciseProbeIntervalSeconds` | `60` | Cada cuánto se sondea el % exacto (mínimo 30s). |
-| `claudePulse.claudeBinaryPath` | `""` | Ruta al binario `claude` si no está en el PATH de VS Code. |
-| `claudePulse.tokenLimit5h` | `88000` | Solo fallback si `preciseMode` está off o el probe falla. |
-| `claudePulse.refreshIntervalSeconds` | `15` | Cada cuánto se releen los datos locales de sesión (coste/tokens 24h-7d). |
-| `claudePulse.displayMode` | `both` | `percent` \| `cost` \| `both` en el texto de la barra. |
-| `claudePulse.projectsDir` | `""` (autodetecta) | Override de `~/.claude/projects`. |
+| `claudePulse.preciseMode` | `true` | Polls Anthropic for the exact %. Off = local estimate only, no `claude` execution. |
+| `claudePulse.preciseProbeIntervalSeconds` | `60` | How often the exact % is polled (minimum 30s). |
+| `claudePulse.claudeBinaryPath` | `""` | Path to the `claude` binary if it's not on VS Code's PATH. |
+| `claudePulse.tokenLimit5h` | `88000` | Fallback only, if `preciseMode` is off or the probe fails. |
+| `claudePulse.refreshIntervalSeconds` | `15` | How often local session data is re-read (cost/tokens 24h-7d). |
+| `claudePulse.displayMode` | `both` | `percent` \| `cost` \| `both` in the status bar text. |
+| `claudePulse.projectsDir` | `""` (autodetect) | Override for `~/.claude/projects`. |
 
-## Requisitos
+## Requirements
 
-- VS Code 1.85 o superior.
-- [Claude Code](https://code.claude.com) instalado y autenticado (`claude auth login`) — Claude Pulse lo usa como fuente del dato exacto, no incluye su propia autenticación.
+- VS Code 1.85 or later.
+- [Claude Code](https://code.claude.com) installed and authenticated (`claude auth login`) — Claude Pulse uses it as the source of the exact figure, it doesn't ship its own authentication.
 
-## Desarrollo
+## Development
 
 ```bash
 npm install
-npm run watch     # esbuild en modo watch
-npm run check     # chequeo de tipos (tsc --noEmit)
-npm run package   # genera el .vsix (incluye workaround para Node 18, ver abajo)
+npm run watch     # esbuild in watch mode
+npm run check     # type checking (tsc --noEmit)
+npm run package   # generates the .vsix (includes a Node 18 workaround, see below)
 ```
 
-Pulsa **F5** en VS Code para abrir un "Extension Development Host" con la
-extensión cargada en caliente.
+Press **F5** in VS Code to open an "Extension Development Host" with the
+extension hot-loaded.
 
-Detalles de arquitectura, decisiones de diseño y por qué ciertas superficies
-de UI (un panel dockeado, un flyout flotante) se evaluaron y descartaron:
-ver [`CLAUDE.md`](CLAUDE.md).
+Architecture details, design decisions, and why certain UI surfaces (a
+docked panel, a floating flyout) were evaluated and dropped: see
+[`CLAUDE.md`](CLAUDE.md).
 
-### Nota: Node 18
+### Note: Node 18
 
-`@vscode/vsce` reciente arrastra `undici`, que en Node 20+ usa el global
-`File` — en Node 18 no existe y `vsce package` falla con
-`ReferenceError: File is not defined`. `npm run package` ya incluye el
-workaround (`scripts/node18-file-shim.js`).
+Recent `@vscode/vsce` pulls in `undici`, which on Node 20+ uses the global
+`File` — on Node 18 it doesn't exist and `vsce package` fails with
+`ReferenceError: File is not defined`. `npm run package` already includes
+the workaround (`scripts/node18-file-shim.js`).
 
-## Cómo consigue el dato exacto (detalle técnico)
+## How it gets the exact figure (technical detail)
 
-Cada respuesta autenticada de `/v1/messages` incluye, entre sus cabeceras
-HTTP, el estado de la ventana de rate-limit de la cuenta — no del modelo, de
-la cuenta:
+Every authenticated response from `/v1/messages` includes, among its HTTP
+headers, the account's rate-limit window status — the account's, not the
+model's:
 
 ```
 anthropic-ratelimit-unified-5h-utilization: 0.37
@@ -154,13 +150,14 @@ anthropic-ratelimit-unified-7d-utilization: 0.18
 anthropic-ratelimit-unified-7d-reset: 1788375600
 ```
 
-Claude Pulse no reimplementa el cliente OAuth de Claude Code para leer estas
-cabeceras directamente (sería frágil y tocaría credenciales que no le
-corresponden) — en su lugar, ejecuta periódicamente el propio `claude` CLI ya
-autenticado en tu máquina con `ANTHROPIC_LOG=debug` y `--no-session-persistence`,
-y parsea la cabecera de su salida de depuración. Es más lento (~1-2s por
-sondeo) que una llamada HTTP directa, pero no requiere gestionar tokens.
+Claude Pulse doesn't reimplement Claude Code's OAuth client to read these
+headers directly (that would be fragile and would touch credentials it has
+no business touching) — instead, it periodically runs the already-
+authenticated `claude` CLI on your machine with `ANTHROPIC_LOG=debug` and
+`--no-session-persistence`, and parses the header from its debug output.
+It's slower (~1-2s per poll) than a direct HTTP call, but doesn't require
+managing tokens.
 
-## Licencia
+## License
 
 MIT
